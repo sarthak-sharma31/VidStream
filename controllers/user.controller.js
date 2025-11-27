@@ -65,4 +65,4 @@ const loginUser = async (req, res)=>{
     const {email, username, password} = req.body;
 }
 
-export { registerUser };git@github.com:sarthak-sharma31/VidStream.git
+export { registerUser };

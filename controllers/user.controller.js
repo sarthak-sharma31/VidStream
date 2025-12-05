@@ -1,34 +1,56 @@
+import { error, log } from 'console';
 import { User } from '../models/User.models.js';
 import { uploadOnCloudinary } from '../utils/Cloudinary.js';
-import path from "path"
+import express from "express";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+const router = express.Router();
+
+const generateAccessAndRefreshToken = async (userId) => {
+    try {
+        const user = await User.findById(userId);
+
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+
+        user.refreshToken = refreshToken;
+        await user.save();
+        // await user.save({validateBeforeSave: false});
+        return { accessToken, refreshToken };
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+}
 
 const registerUser = async (req, res) => {
 
     const { fullName, email, password, username } = req.body;
 
     try {
-        if (!(fullName || email || password || username)) {
-            return res.status(400).json({ message: "All Feilds are Required!" });
+        if (!fullName || !email || !password || !username) {
+            return res.status(400).json({ message: "All fields are required!" });
         }
-        const existedUser = await User.findOne({ $or: [{ username }, { email }] })
-        if (existedUser) {
+
+        const existingUser = await User.findOne({ $or: [{ username }, { email }] })
+        if (existingUser) {
             return res.status(400).json({ message: "User already exists!" });
         }
+        console.log(fullName, email, password, username);
 
-        const localAvatarpath = req.files?.avatar[0]?.path;
-        const localCoverPath = req.files?.coverImage[0]?.path;
-
+        const localAvatarpath = req.files?.avatar?.[0]?.path;
+        const localCoverPath = req.files?.coverImage?.[0]?.path;
 
         if (!localAvatarpath) return res.status(400).json({ message: "Avatar is Required!" });
 
         const avatar = await uploadOnCloudinary(localAvatarpath);
         console.log("Avatar upload result:", avatar.url);
 
-        if (localCoverPath) {
-            const coverImage = await uploadOnCloudinary(localCoverPath);
-            console.log("cover upload result:", coverImage.url);
-            if (!coverImage) return res.status(400).json({ message: "Cover Image Upload failed!" });
-        }
+        // if (localCoverPath) {
+        //     const coverImage = await uploadOnCloudinary(localCoverPath);
+        //     console.log("cover upload result:", coverImage.url);
+        //     if (!coverImage) return res.status(400).json({ message: "Cover Image Upload failed!" });
+        // }
 
         let coverImageUrl = "";
         if (localCoverPath) {
@@ -57,12 +79,116 @@ const registerUser = async (req, res) => {
         return res.status(200).json({ message: "User Registered Successfully" })
     }
     catch (error) {
-        return res.status(300).json({ error: error })
+        return res.status(500).json({ error: error.message })
+    }
+}
+const loginUser = async (req, res) => {
+    try {
+        const { email, username, password } = req.body;
+
+        if (!(email || username)) {
+            return res.status(400).json({ error: "Email or username is required!" });
+        }
+
+        if (!password) {
+            return res.status(400).json({ error: "Password is required" });
+        }
+
+        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+
+        if (!existingUser) {
+            return res.status(300).json({ message: "User does not exists!" });
+        }
+
+        // const validPassword = await existingUser.isPasswordCorrect(password);
+        const validPassword = await bcrypt.compare(password, existingUser.password);
+
+        if (!validPassword) {
+            return res.status(400).json({ message: "Invalid Password!" });
+        }
+
+        const { accessToken, refreshToken } = await generateAccessAndRefreshToken(existingUser._id);
+
+        const loggedInUser = await User.findById(existingUser._id).select("-password -refreshToken");
+
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+
+        return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options).json({ user: loggedInUser, accessToken, refreshToken, message: "User logged in successfully" });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
     }
 }
 
-const loginUser = async (req, res)=>{
-    const {email, username, password} = req.body;
-}
+const refreshAccessToken = async (req, res)=>{
+    try {
+        const token = req.cookies.refreshToken || req.body.refreshToken;
 
-export { registerUser };
+        if(!token){
+            return res.status(400).json({message: "Token is required!"});
+        }
+
+        const decodedToken = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+
+        const user = await User.findById(decodedToken._id);
+
+        if(!user){
+            return res.status(400).json({error: "Invalid token"})
+        }
+        
+        if(token != user.refreshToken){
+            return res.status(400).json({error: "Token Expired!"})
+        }
+
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+
+        const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user._id);
+
+        return res.status(200).cookie("accessToken", accessToken).cookie("refreshToken", refreshToken).json({accessToken, refreshToken, message: "Token refreshed!"})
+
+    } catch (error) {
+        return res.status(500).json({error: error.message});
+    }
+};
+
+const resetPassword = async(req, res)=>{
+    try {
+        const {email, username, oldPassword, newPassword} = req.body;
+
+        if (!(email || username)) {
+            return res.status(400).json({ error: "Email or username is required!" });
+        }
+
+        if (!oldPassword && !newPassword) {
+            return res.status(400).json({ error: "Old and New Password is required" });
+        }
+
+        const user = await(User.findOne({$or: [{email}, {username}]}));
+
+        if(!user){
+            return res.status(300).json({message: "User does not exist!"})
+        }
+
+        const validPass = user.isCorrectPassword(oldPassword);
+
+        if(!validPass){
+            return res.status(300).json({message: "Incorrect Password!"});
+        }
+
+        user.password = newPassword;
+
+        await user.save();
+
+        return res.status(200).json({message: "Password changed successfully!!"})
+
+    } catch (error) {
+        return res.status(500).json({error: error.message})
+    }
+};
+
+export { registerUser, loginUser, refreshAccessToken, resetPassword };

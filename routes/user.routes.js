@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUser, registerUser, refreshAccessToken, resetPassword } from "../controllers/user.controller.js";
+import { loginUser, registerUser, refreshAccessToken, resetPassword, updateAccountDetails, getCurrentUser } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { v2 as cloudinary } from "cloudinary";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -36,7 +36,11 @@ router.get('/logout', verifyJWT, async(req, res) => {
     } catch (error) {
         return res.status(500).json({error: error.message})
     }
-})
+});
+
+router.post('/get-current-user', verifyJWT, getCurrentUser);
+
+router.post('/update-account-details', verifyJWT, updateAccountDetails);
 
 router.post('/reset-password', resetPassword);
 

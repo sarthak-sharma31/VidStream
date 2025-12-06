@@ -36,7 +36,6 @@ const registerUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ message: "User already exists!" });
         }
-        console.log(fullName, email, password, username);
 
         const localAvatarpath = req.files?.avatar?.[0]?.path;
         const localCoverPath = req.files?.coverImage?.[0]?.path;
@@ -191,4 +190,37 @@ const resetPassword = async(req, res)=>{
     }
 };
 
-export { registerUser, loginUser, refreshAccessToken, resetPassword };
+const getCurrentUser = async(req, res)=>{
+    try {
+        const user = req.user;
+        if(!user) return res.status(400).json({message: "User not found!"});
+        return res.status(200).json({message: "Here is the user!", user});
+    } catch (error) {
+        return res.status(500).json({error: error.message});
+    }
+}
+
+const updateAccountDetails = async(req, res)=>{
+    try {
+        let {username, fullName} = req.body;
+        const user = req.user;
+        if(!username){
+            username = user.username;
+        }
+        if(!fullName){
+            fullName = user.fullName;
+        }
+    
+        const updatedUser = await User.findById(user._id);
+    
+        updatedUser.username = username.toLowerCase();
+        updatedUser.fullName = fullName;
+    
+        await updatedUser.save();
+        return res.status(200).json({message: "Account Updated Successfully!"});
+    } catch (error) {
+        return res.status(500).json({error: error.message});
+    }
+}
+
+export { registerUser, loginUser, refreshAccessToken, resetPassword, getCurrentUser, updateAccountDetails };

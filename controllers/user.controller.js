@@ -4,7 +4,6 @@ import { uploadOnCloudinary } from '../utils/Cloudinary.js';
 import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { availableMemory } from 'process';
 import mongoose from 'mongoose';
 
 const router = express.Router();

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUser, registerUser, refreshAccessToken, resetPassword, updateAccountDetails, getCurrentUser } from "../controllers/user.controller.js";
+import { loginUser, registerUser, refreshAccessToken, resetPassword, updateAccountDetails, getCurrentUser, updateUserAvatar, updateUserCoverImage, getUserChannelProfile, getWatchHistory } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { v2 as cloudinary } from "cloudinary";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -42,6 +42,15 @@ router.post('/get-current-user', verifyJWT, getCurrentUser);
 
 router.post('/update-account-details', verifyJWT, updateAccountDetails);
 
-router.post('/reset-password', resetPassword);
+router.post('/update-avatar', verifyJWT, upload.fields([{ name: "avatar", maxCount: 1 }]), updateUserAvatar);
+router.post('/update-cover-image', verifyJWT, upload.fields([{ name: "coverImage", maxCount: 1 }]), updateUserCoverImage);
+router.post('/reset-password', verifyJWT, resetPassword);
+router.get('/current-user', verifyJWT, getCurrentUser);
+router.patch('/update-account', verifyJWT, updateAccountDetails);
+router.patch('/avatar', verifyJWT, upload.single("avatar"), updateUserAvatar);
+router.patch('/cover-img', verifyJWT, upload.single("coverImage"), updateUserCoverImage);
+
+router.get("/get-channel/:username", verifyJWT, getUserChannelProfile);
+router.get("/get-watchHistory", verifyJWT, getWatchHistory);
 
 export default router;
